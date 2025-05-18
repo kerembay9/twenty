@@ -174,6 +174,7 @@ export class RunWorkflowJob {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     context: Record<string, any>;
   }) {
+    console.log('Executing workflow step', currentStepId);
     const { error, pendingEvent } =
       await this.workflowExecutorWorkspaceService.execute({
         workflowRunId,

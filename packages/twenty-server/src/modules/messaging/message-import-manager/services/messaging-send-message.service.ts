@@ -1,14 +1,13 @@
 import { Injectable } from '@nestjs/common';
 
-import { z } from 'zod';
-import { assertUnreachable, isDefined } from 'twenty-shared/utils';
-import { ConnectedAccountProvider } from 'twenty-shared/types';
+import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 
-import { ConnectedAccountWorkspaceEntity } from 'src/modules/connected-account/standard-objects/connected-account.workspace-entity';
 import { GmailClientProvider } from 'src/modules/messaging/message-import-manager/drivers/gmail/providers/gmail-client.provider';
-import { MicrosoftClientProvider } from 'src/modules/messaging/message-import-manager/drivers/microsoft/providers/microsoft-client.provider';
 import { OAuth2ClientProvider } from 'src/modules/messaging/message-import-manager/drivers/gmail/providers/oauth2-client.provider';
-import { mimeEncode } from 'src/modules/messaging/message-import-manager/utils/mime-encode.util';
+import { MicrosoftClientProvider } from 'src/modules/messaging/message-import-manager/drivers/microsoft/providers/microsoft-client.provider';
+
+dotenv.config();
 
 interface SendMessageInput {
   body: string;
@@ -26,78 +25,104 @@ export class MessagingSendMessageService {
 
   public async sendMessage(
     sendMessageInput: SendMessageInput,
-    connectedAccount: ConnectedAccountWorkspaceEntity,
+    _connectedAccount: unknown, //ConnectedAccountWorkspaceEntity
   ): Promise<void> {
-    switch (connectedAccount.provider) {
-      case ConnectedAccountProvider.GOOGLE: {
-        const gmailClient =
-          await this.gmailClientProvider.getGmailClient(connectedAccount);
+    try {
+      // Create a transporter object using SMTP transport
+      const transporter = nodemailer.createTransport({
+        service: 'gmail', // Use Gmail as the service
+        auth: {
+          user: process.env.EMAIL_SMTP_USER,
+          pass: process.env.EMAIL_SMTP_PASSWORD,
+        },
+      });
 
-        const oAuth2Client =
-          await this.oAuth2ClientProvider.getOAuth2Client(connectedAccount);
+      // Email message options
+      const mailOptions = {
+        from: process.env.EMAIL_SMTP_USER, // Sender address
+        to: sendMessageInput.to, // Receiver's email address
+        subject: sendMessageInput.subject, // Subject line
+        text: sendMessageInput.body, // Plain text body
+      };
 
-        const { data } = await oAuth2Client.userinfo.get();
+      // Send the email
+      const info = await transporter.sendMail(mailOptions);
 
-        const fromEmail = data.email;
-
-        const fromName = data.name;
-
-        const headers: string[] = [];
-
-        if (isDefined(fromName)) {
-          headers.push(`From: "${mimeEncode(fromName)}" <${fromEmail}>`);
-        }
-
-        headers.push(
-          `To: ${sendMessageInput.to}`,
-          `Subject: ${mimeEncode(sendMessageInput.subject)}`,
-          'MIME-Version: 1.0',
-          'Content-Type: text/plain; charset="UTF-8"',
-          '',
-          sendMessageInput.body,
-        );
-
-        const message = headers.join('\n');
-
-        const encodedMessage = Buffer.from(message).toString('base64');
-
-        await gmailClient.users.messages.send({
-          userId: 'me',
-          requestBody: {
-            raw: encodedMessage,
-          },
-        });
-        break;
-      }
-      case ConnectedAccountProvider.MICROSOFT: {
-        const microsoftClient =
-          await this.microsoftClientProvider.getMicrosoftClient(
-            connectedAccount,
-          );
-
-        const message = {
-          subject: sendMessageInput.subject,
-          body: {
-            contentType: 'Text',
-            content: sendMessageInput.body,
-          },
-          toRecipients: [{ emailAddress: { address: sendMessageInput.to } }],
-        };
-
-        const response = await microsoftClient
-          .api(`/me/messages`)
-          .post(message);
-
-        z.string().parse(response.id);
-
-        await microsoftClient.api(`/me/messages/${response.id}/send`).post({});
-        break;
-      }
-      default:
-        assertUnreachable(
-          connectedAccount.provider,
-          `Provider ${connectedAccount.provider} not supported for sending messages`,
-        );
+      console.log('Email sent: ' + info.messageId);
+    } catch (error) {
+      console.error('Error sending email:', error);
     }
+
+    // switch (connectedAccount.provider) {
+    //   case ConnectedAccountProvider.GOOGLE: {
+    //     const gmailClient =
+    //       await this.gmailClientProvider.getGmailClient(connectedAccount);
+
+    //     const oAuth2Client =
+    //       await this.oAuth2ClientProvider.getOAuth2Client(connectedAccount);
+
+    //     const { data } = await oAuth2Client.userinfo.get();
+
+    //     const fromEmail = data.email;
+
+    //     const fromName = data.name;
+
+    //     const headers: string[] = [];
+
+    //     if (isDefined(fromName)) {
+    //       headers.push(`From: "${mimeEncode(fromName)}" <${fromEmail}>`);
+    //     }
+
+    //     headers.push(
+    //       `To: ${sendMessageInput.to}`,
+    //       `Subject: ${mimeEncode(sendMessageInput.subject)}`,
+    //       'MIME-Version: 1.0',
+    //       'Content-Type: text/plain; charset="UTF-8"',
+    //       '',
+    //       sendMessageInput.body,
+    //     );
+
+    //     const message = headers.join('\n');
+
+    //     const encodedMessage = Buffer.from(message).toString('base64');
+
+    //     await gmailClient.users.messages.send({
+    //       userId: 'me',
+    //       requestBody: {
+    //         raw: encodedMessage,
+    //       },
+    //     });
+    //     break;
+    //   }
+    //   case ConnectedAccountProvider.MICROSOFT: {
+    //     const microsoftClient =
+    //       await this.microsoftClientProvider.getMicrosoftClient(
+    //         connectedAccount,
+    //       );
+
+    //     const message = {
+    //       subject: sendMessageInput.subject,
+    //       body: {
+    //         contentType: 'Text',
+    //         content: sendMessageInput.body,
+    //       },
+    //       toRecipients: [{ emailAddress: { address: sendMessageInput.to } }],
+    //     };
+
+    //     const response = await microsoftClient
+    //       .api(`/me/messages`)
+    //       .post(message);
+
+    //     z.string().parse(response.id);
+
+    //     await microsoftClient.api(`/me/messages/${response.id}/send`).post({});
+    //     break;
+    //   }
+    //   default:
+    //     assertUnreachable(
+    //       connectedAccount.provider,
+    //       `Provider ${connectedAccount.provider} not supported for sending messages`,
+    //     );
+    // }
   }
 }

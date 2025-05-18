@@ -39,9 +39,10 @@ export class SendEmailWorkflowAction implements WorkflowExecutor {
   ) {}
 
   private async getConnectedAccount(connectedAccountId: string) {
+    console.log('connectedAccountId', connectedAccountId);
     if (!isValidUuid(connectedAccountId)) {
       throw new SendEmailActionException(
-        `Connected Account ID is not a valid UUID`,
+        `Connected Account ID ${connectedAccountId} is not a valid UUID`,
         SendEmailActionExceptionCode.INVALID_CONNECTED_ACCOUNT_ID,
       );
     }
@@ -95,9 +96,9 @@ export class SendEmailWorkflowAction implements WorkflowExecutor {
       );
     }
 
-    const connectedAccount = await this.getConnectedAccount(
-      step.settings.input.connectedAccountId,
-    );
+    // const connectedAccount = await this.getConnectedAccount(
+    //   step.settings.input.connectedAccountId,
+    // );
 
     const workflowActionInput = resolveInput(
       step.settings.input,
@@ -128,7 +129,8 @@ export class SendEmailWorkflowAction implements WorkflowExecutor {
         subject: safeSubject,
         body: safeBody,
       },
-      connectedAccount,
+      '',
+      // connectedAccount ,
     );
 
     this.logger.log(`Email sent successfully`);
